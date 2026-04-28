@@ -137,7 +137,9 @@ if uploaded_file:
             st.caption("Distribusi Nilai Mahasiswa")
             st.caption("Sebaran nilai mahasiswa pada seluruh kelas paralel.")            
             fig = px.histogram(df, x="nilai_angka", nbins=20, height=220)
-            fig.update_layout(yaxis_title="Jumlah", xaxis_title="Nilai Angka")
+            fig.update_layout(yaxis_title="Jumlah", xaxis_title="Nilai Angka",xaxis=dict(
+            dtick=25   # jarak antar angka di sumbu X
+        ))
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -145,7 +147,12 @@ if uploaded_file:
             st.caption("Perbandingan kelas yang signifikan dan tidak signifikan.")            
             sig = hasil_df["signifikan"].value_counts().reset_index()
             sig.columns = ["Status","Jumlah"]
-            fig = px.bar(sig, x="Status", y="Jumlah", text="Jumlah", height=220)
+            total = sig["Jumlah"].sum()
+            # Hitung persentase
+            sig["Persentase"] = (sig["Jumlah"] / total * 100).round(1)
+            fig = px.bar(sig, x="Status", y="Jumlah",
+            text=sig["Jumlah"].astype(str) + " (" + sig["Persentase"].astype(str) + "%)", height=220)
+            fig.update_traces(textposition="outside")
             st.plotly_chart(fig, use_container_width=True)
 
         with col3:
@@ -167,13 +174,17 @@ if uploaded_file:
             st.caption("Dosen Sama vs Berbeda")
             st.caption("Proporsi ketimpangan pada seluruh kelas paralel.")
 
-            dosen_chart = hasil_df.groupby("dosen_sama")["signifikan"].agg(
-                total="count",
-                signif=lambda x: (x=="Ya").sum()
-            ).reset_index()
+            total_dosen = len(hasil_df)  # ← FIX: pakai total yang sama dengan metric
 
-            dosen_chart["persen"] = (dosen_chart["signif"] / dosen_chart["total"] * 100).round(1)
-            dosen_chart["Kategori"] = dosen_chart["dosen_sama"].map({True:"Sama", False:"Berbeda"})
+            dosen_chart = hasil_df["dosen_sama"].value_counts().reset_index()
+            dosen_chart.columns = ["dosen_sama", "total"]
+
+            dosen_chart["persen"] = (dosen_chart["total"] / total_dosen * 100).round(1)
+
+            dosen_chart["Kategori"] = dosen_chart["dosen_sama"].map({
+                True: "Sama",
+                False: "Berbeda"
+            })
 
             fig = px.bar(
                 dosen_chart,
