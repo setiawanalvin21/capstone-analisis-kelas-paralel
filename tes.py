@@ -189,13 +189,13 @@ if uploaded_file:
             fig = px.bar(
                 dosen_chart,
                 x="Kategori",
-                y="persen",
-                text=dosen_chart["persen"].astype(str) + "%",
+                y="total",
+                text=dosen_chart["total"].astype(str) + " (" + dosen_chart["persen"].astype(str) + "%)",
                 height=220
             )
 
             fig.update_layout(
-                yaxis_title="Persentase Ketimpangan (%)"
+                yaxis_title="Jumlah Kelas Paralel"
             )
 
             st.plotly_chart(fig, use_container_width=True)
@@ -224,10 +224,10 @@ if uploaded_file:
         st.divider()
         st.subheader("Ringkasan")
 
-        c1, c2, c3, c4, c5 = st.columns(5)
+        c1, c2, c3= st.columns(3)
 
-        # ================= SIGNIFIKAN =================
-        sig_total = (hasil_df["signifikan"]=="Ya").sum()
+       # ================= SIGNIFIKAN =================
+        sig_total = (hasil_df["signifikan"] == "Ya").sum()
         total = len(hasil_df)
 
         persen_sig = (sig_total / total * 100) if total > 0 else 0
@@ -239,37 +239,71 @@ if uploaded_file:
         )
 
         # ================= PRODI =================
-        ps = hasil_df.groupby("nama_prodi")["signifikan"].apply(lambda x:(x=="Ya").sum())
+        ps = hasil_df.groupby("nama_prodi")["signifikan"].apply(lambda x: (x == "Ya").sum())
 
-        c2.metric("Prodi Timpang", ps.idxmax())
-        c3.metric("Prodi Stabil", ps.idxmin())
+        if not ps.empty:
+            prodi_timpang = ps.idxmax()
+            prodi_stabil = ps.idxmin()
 
-        # ================= DOSEN SAMA =================
-        dosen_sama = (hasil_df["dosen_sama"] == True).sum()
-        persen_sama = (dosen_sama / total * 100) if total > 0 else 0
+            c2.metric("Prodi Timpang", prodi_timpang)
+            c3.metric("Prodi Stabil", prodi_stabil)
+        else:
+            prodi_timpang = "-"
+            prodi_stabil = "-"
 
-        c4.metric(
-            "Dosen Sama",
-            f"{dosen_sama}/{total}",
-            f"{persen_sama:.2f}%"
+            c2.metric("Prodi Timpang", "-")
+            c3.metric("Prodi Stabil", "-")
+
+        # ================= INSIGHT OTOMATIS =================
+        st.markdown("### 📊 Insight Otomatis")
+        
+        st.info(
+            f"Dari {total} kelas paralel, terdapat {sig_total} kelas "
+            f"({persen_sig:.1f}%) yang menunjukkan perbedaan nilai signifikan."
         )
 
-        # ================= DOSEN BERBEDA =================
-        dosen_berbeda = (hasil_df["dosen_sama"] == False).sum()
-        persen_berbeda = (dosen_berbeda / total * 100) if total > 0 else 0
+        # Insight ketimpangan
+        if persen_sig > 50:
+            st.warning("Lebih dari setengah kelas menunjukkan ketimpangan nilai yang signifikan.")
+        else:
+            st.success("Sebagian besar kelas tidak menunjukkan ketimpangan nilai yang signifikan.")
 
-        c5.metric(
-            "Dosen Berbeda",
-            f"{dosen_berbeda}/{total}",
-            f"{persen_berbeda:.2f}%"
-        )  
-
+        # Insight prodi
+        if prodi_timpang != "-":
+            st.write(
+                f"Program studi dengan ketimpangan tertinggi adalah **{prodi_timpang}**, "
+                f"sedangkan yang paling stabil adalah **{prodi_stabil}**."
+            )
+        else:
+            st.write("Tidak ada program studi dengan ketimpangan signifikan.")
+        
     else:
         st.subheader("📂 Data Nilai Mahasiswa (Setelah Cleaning)")
         st.dataframe(df)
 
         st.subheader("📊 Hasil Analisis ANOVA Kelas Paralel")
         st.dataframe(hasil_df)
+        
+        st.subheader("📈 Statistik Deskriptif Nilai")
+        st.dataframe(df["nilai_angka"].describe())
+        
+        st.subheader("📊 Rata-rata Nilai per Prodi")
+
+        avg_prodi = (
+            df.groupby("nama_prodi")["nilai_angka"]
+                .mean()
+                .reset_index()
+                .sort_values(by="nilai_angka", ascending=False)
+                .reset_index(drop=True)
+            )
+
+        # jadikan ranking (mulai dari 1)
+        avg_prodi.index += 1
+
+        # opsional: rename kolom biar lebih jelas
+        avg_prodi.columns = ["Prodi", "Rata-rata Nilai"]
+
+        st.dataframe(avg_prodi)
 
 else:
     st.info("Upload file Excel terlebih dahulu")
