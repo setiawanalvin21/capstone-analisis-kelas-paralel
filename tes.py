@@ -1,5 +1,5 @@
 # ============================================================
-# DASHBOARD ANALISIS KELAS PARALEL (FINAL FIX + VISUAL SESUAI)
+# DASHBOARD ANALISIS KELAS PARALEL 
 # ============================================================
 
 import streamlit as st
