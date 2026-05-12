@@ -139,146 +139,152 @@ if uploaded_file:
 
     # ================= DASHBOARD =================
     if menu == "Dashboard":
+        tab_vis, tab_ringkasan = st.tabs(["📊 Visualisasi & Insight", "📋 Hasil Ringkasan"])
 
-        col1, col2, col3 = st.columns(3)
+        with tab_vis:
+            col1, col2, col3 = st.columns(3)
 
-        with col1:
-            st.caption("Sebaran Nilai Mahasiswa di Semua Kelas Paralel")
-            fig = px.histogram(df, x="nilai_angka", nbins=20, height=220)
-            fig.update_layout(yaxis_title="Jumlah", xaxis_title="Nilai Angka",xaxis=dict(
-            dtick=25   # jarak antar angka di sumbu X
-        ))
-            st.plotly_chart(fig, use_container_width=True)
+            with col1:
+                st.caption("Sebaran Nilai Mahasiswa di Semua Kelas Paralel")
+                fig = px.histogram(df, x="nilai_angka", nbins=20, height=220)
+                fig.update_layout(yaxis_title="Jumlah", xaxis_title="Nilai Angka",xaxis=dict(
+                dtick=25   # jarak antar angka di sumbu X
+            ))
+                st.plotly_chart(fig, use_container_width=True)
 
-        with col2:
-            st.caption("Perbandingan Kelas yang Nilainya Berbeda Signifikan vs Tidak Signifikan")
-            sig = hasil_df["signifikan"].value_counts().reset_index()
-            sig.columns = ["Status","Jumlah"]
-            total = sig["Jumlah"].sum()
-            # Hitung persentase
-            sig["Persentase"] = (sig["Jumlah"] / total * 100).round(1)
-            fig = px.bar(sig, x="Status", y="Jumlah",
-            text=sig["Jumlah"].astype(str) + " (" + sig["Persentase"].astype(str) + "%)", height=220)
-            fig.update_traces(textposition="outside")
-            st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                st.caption("Perbandingan Kelas yang Nilainya Berbeda Signifikan vs Tidak Signifikan")
+                sig = hasil_df["signifikan"].value_counts().reset_index()
+                sig.columns = ["Status","Jumlah"]
+                total = sig["Jumlah"].sum()
+                # Hitung persentase
+                sig["Persentase"] = (sig["Jumlah"] / total * 100).round(1)
+                fig = px.bar(sig, x="Status", y="Jumlah",
+                text=sig["Jumlah"].astype(str) + " (" + sig["Persentase"].astype(str) + "%)", height=220)
+                fig.update_traces(textposition="outside")
+                st.plotly_chart(fig, use_container_width=True)
 
-        with col3:
-            st.caption("Jumlah Kelas dengan Perbedaan Nilai di Setiap Program Studi")
-            prodi_chart = hasil_df.groupby("nama_prodi")["signifikan"].apply(
-                lambda x: (x=="Ya").sum()
-            ).reset_index()
+            with col3:
+                st.caption("Jumlah Kelas dengan Perbedaan Nilai di Setiap Program Studi")
+                prodi_chart = hasil_df.groupby("nama_prodi")["signifikan"].apply(
+                    lambda x: (x=="Ya").sum()
+                ).reset_index()
 
-            prodi_chart.columns = ["Prodi","Jumlah"]
-            prodi_chart = prodi_chart.sort_values(by="Jumlah", ascending=False)
+                prodi_chart.columns = ["Prodi","Jumlah"]
+                prodi_chart = prodi_chart.sort_values(by="Jumlah", ascending=False)
 
-            fig = px.bar(prodi_chart, x="Prodi", y="Jumlah", text="Jumlah", height=220)
-            st.plotly_chart(fig, use_container_width=True)
+                fig = px.bar(prodi_chart, x="Prodi", y="Jumlah", text="Jumlah", height=220)
+                st.plotly_chart(fig, use_container_width=True)
 
-        col4, col5 = st.columns([1,2])
+            col4, col5 = st.columns([1,2])
 
-        with col4:
-            st.caption("Perbandingan Perbedaan Nilai: Dosen Sama vs Dosen Berbeda")
-            total_dosen = len(hasil_df) 
+            with col4:
+                st.caption("Perbandingan Perbedaan Nilai: Dosen Sama vs Dosen Berbeda")
+                total_dosen = len(hasil_df) 
 
-            dosen_chart = hasil_df["dosen_sama"].value_counts().reset_index()
-            dosen_chart.columns = ["dosen_sama", "total"]
+                dosen_chart = hasil_df["dosen_sama"].value_counts().reset_index()
+                dosen_chart.columns = ["dosen_sama", "total"]
 
-            dosen_chart["persen"] = (dosen_chart["total"] / total_dosen * 100).round(1)
+                dosen_chart["persen"] = (dosen_chart["total"] / total_dosen * 100).round(1)
 
-            dosen_chart["Kategori"] = dosen_chart["dosen_sama"].map({
-                True: "Sama",
-                False: "Berbeda"
-            })
+                dosen_chart["Kategori"] = dosen_chart["dosen_sama"].map({
+                    True: "Sama",
+                    False: "Berbeda"
+                })
 
-            fig = px.bar(
-                dosen_chart,
-                x="Kategori",
-                y="total",
-                text=dosen_chart["total"].astype(str) + " (" + dosen_chart["persen"].astype(str) + "%)",
-                height=220
+                fig = px.bar(
+                    dosen_chart,
+                    x="Kategori",
+                    y="total",
+                    text=dosen_chart["total"].astype(str) + " (" + dosen_chart["persen"].astype(str) + "%)",
+                    height=220
+                )
+
+                fig.update_layout(
+                    yaxis_title="Jumlah Kelas Paralel"
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col5:
+                st.caption("Perbandingan Nilai Antar Kelas dalam Satu Mata Kuliah")
+                mk = st.selectbox("Pilih MK", sorted(df["kode_makul"].unique()))
+
+                plot_data = df[df["kode_makul"] == mk].copy()
+                plot_data = plot_data.explode("dosen")
+
+                fig = px.box(plot_data, x="grup", y="nilai_angka", color="dosen", height=250)
+
+                mean_df = plot_data.groupby("grup")["nilai_angka"].mean().reset_index()
+                fig.add_scatter(
+                    x=mean_df["grup"],
+                    y=mean_df["nilai_angka"],
+                    mode="markers",
+                    marker=dict(size=8, symbol="diamond"),
+                    name="Mean"
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+            st.divider()
+            st.subheader("Ringkasan")
+
+            c1, c2, c3= st.columns(3)
+
+           # ================= SIGNIFIKAN =================
+            sig_total = (hasil_df["signifikan"] == "Ya").sum()
+            total = len(hasil_df)
+
+            persen_sig = (sig_total / total * 100) if total > 0 else 0
+
+            c1.metric(
+                "Kelas dengan Perbedaan Nilai Signifikan",
+                f"{sig_total}/{total}",
+                f"{persen_sig:.2f}%"
             )
 
-            fig.update_layout(
-                yaxis_title="Jumlah Kelas Paralel"
+            # ================= PRODI =================
+            ps = hasil_df.groupby("nama_prodi")["signifikan"].apply(lambda x: (x == "Ya").sum())
+
+            if not ps.empty:
+                prodi_timpang = ps.idxmax()
+                prodi_stabil = ps.idxmin()
+
+                c2.metric("Prodi Timpang", prodi_timpang)
+                c3.metric("Prodi Stabil", prodi_stabil)
+            else:
+                prodi_timpang = "-"
+                prodi_stabil = "-"
+
+                c2.metric("Prodi Timpang", "-")
+                c3.metric("Prodi Stabil", "-")
+
+            # ================= INSIGHT OTOMATIS =================
+            st.markdown("### 📊 Insight Otomatis")
+            
+            st.info(
+                f"Dari {total} kelas paralel, terdapat {sig_total} kelas "
+                f"({persen_sig:.1f}%) yang menunjukkan perbedaan nilai signifikan."
             )
 
-            st.plotly_chart(fig, use_container_width=True)
+            # Insight ketimpangan
+            if persen_sig > 50:
+                st.warning("Lebih dari setengah kelas menunjukkan ketimpangan nilai yang signifikan.")
+            else:
+                st.success("Sebagian besar kelas tidak menunjukkan ketimpangan nilai yang signifikan.")
 
-        with col5:
-            st.caption("Perbandingan Nilai Antar Kelas dalam Satu Mata Kuliah")
-            mk = st.selectbox("Pilih MK", sorted(df["kode_makul"].unique()))
+            # Insight prodi
+            if prodi_timpang != "-":
+                st.write(
+                    f"Program studi dengan ketimpangan tertinggi adalah **{prodi_timpang}**, "
+                    f"sedangkan yang paling stabil adalah **{prodi_stabil}**."
+                )
+            else:
+                st.write("Tidak ada program studi dengan ketimpangan signifikan.")
 
-            plot_data = df[df["kode_makul"] == mk].copy()
-            plot_data = plot_data.explode("dosen")
+        with tab_ringkasan:
+            st.info("Hasil ringkasan akan ditampilkan di sini.")
 
-            fig = px.box(plot_data, x="grup", y="nilai_angka", color="dosen", height=250)
-
-            mean_df = plot_data.groupby("grup")["nilai_angka"].mean().reset_index()
-            fig.add_scatter(
-                x=mean_df["grup"],
-                y=mean_df["nilai_angka"],
-                mode="markers",
-                marker=dict(size=8, symbol="diamond"),
-                name="Mean"
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        st.divider()
-        st.subheader("Ringkasan")
-
-        c1, c2, c3= st.columns(3)
-
-       # ================= SIGNIFIKAN =================
-        sig_total = (hasil_df["signifikan"] == "Ya").sum()
-        total = len(hasil_df)
-
-        persen_sig = (sig_total / total * 100) if total > 0 else 0
-
-        c1.metric(
-            "Kelas dengan Perbedaan Nilai Signifikan",
-            f"{sig_total}/{total}",
-            f"{persen_sig:.2f}%"
-        )
-
-        # ================= PRODI =================
-        ps = hasil_df.groupby("nama_prodi")["signifikan"].apply(lambda x: (x == "Ya").sum())
-
-        if not ps.empty:
-            prodi_timpang = ps.idxmax()
-            prodi_stabil = ps.idxmin()
-
-            c2.metric("Prodi Timpang", prodi_timpang)
-            c3.metric("Prodi Stabil", prodi_stabil)
-        else:
-            prodi_timpang = "-"
-            prodi_stabil = "-"
-
-            c2.metric("Prodi Timpang", "-")
-            c3.metric("Prodi Stabil", "-")
-
-        # ================= INSIGHT OTOMATIS =================
-        st.markdown("### 📊 Insight Otomatis")
-        
-        st.info(
-            f"Dari {total} kelas paralel, terdapat {sig_total} kelas "
-            f"({persen_sig:.1f}%) yang menunjukkan perbedaan nilai signifikan."
-        )
-
-        # Insight ketimpangan
-        if persen_sig > 50:
-            st.warning("Lebih dari setengah kelas menunjukkan ketimpangan nilai yang signifikan.")
-        else:
-            st.success("Sebagian besar kelas tidak menunjukkan ketimpangan nilai yang signifikan.")
-
-        # Insight prodi
-        if prodi_timpang != "-":
-            st.write(
-                f"Program studi dengan ketimpangan tertinggi adalah **{prodi_timpang}**, "
-                f"sedangkan yang paling stabil adalah **{prodi_stabil}**."
-            )
-        else:
-            st.write("Tidak ada program studi dengan ketimpangan signifikan.")
         
     else:
         st.subheader("📂 Data Nilai Mahasiswa (Setelah Cleaning)")
