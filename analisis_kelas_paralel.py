@@ -21,7 +21,7 @@ st.markdown("""
             font-weight: bold !important;
             color: white !important;
             text-align: left;
-            margin-bottom: 20px;
+            margin-bottom: 5px;
         }
         .metric-box {
             background-color: #f8f9fa;
@@ -204,6 +204,7 @@ if uploaded_file:
         col1, col2, col3 = st.columns(3)
         
         with col1:
+            st.caption("Signifikansi per Prodi")
             # Stacked bar chart for Prodi
             prodi_stats = hasil_df.groupby("nama_prodi")["signifikan"].value_counts().unstack(fill_value=0).reset_index()
             prodi_stats = prodi_stats.rename(columns={"Ya": "Signifikan", "Tidak": "Tidak"})
@@ -216,7 +217,7 @@ if uploaded_file:
             # Plotly stacked bar
             fig_prodi = px.bar(prodi_stats, x="nama_prodi", y=["Signifikan", "Tidak"], 
                               labels={"value": "Jumlah MK", "nama_prodi": "Prodi", "variable": "Status"},
-                              title="Signifikansi per Prodi", height=300,
+                              height=300,
                               color_discrete_map={"Signifikan": "#ef553b", "Tidak": "#636efa"})
             
             # Tambahkan total di atas grafik
@@ -256,12 +257,11 @@ if uploaded_file:
             dosen_stats = hasil_df.groupby("dosen_sama")["signifikan"].apply(lambda x: (x == "Ya").sum()).reset_index()
             dosen_stats.columns = ["dosen_sama", "jumlah"]
             
-            dosen_totals = hasil_df["dosen_sama"].value_counts().reset_index()
-            dosen_totals.columns = ["dosen_sama", "total_count"]
+            # Hitung total keseluruhan yang signifikan sebagai pembagi agar total % jadi 100%
+            total_sig_count = (hasil_df["signifikan"] == "Ya").sum()
             
-            dosen_stats = dosen_stats.merge(dosen_totals, on="dosen_sama")
             dosen_stats["Kategori"] = dosen_stats["dosen_sama"].map({True: "Sama", False: "Berbeda"})
-            dosen_stats["Persen"] = (dosen_stats["jumlah"] / dosen_stats["total_count"] * 100).round(1)
+            dosen_stats["Persen"] = (dosen_stats["jumlah"] / total_sig_count * 100).round(1) if total_sig_count > 0 else 0
             
             fig_dosen = px.bar(dosen_stats, x="Kategori", y="jumlah", 
                               text=dosen_stats["jumlah"].astype(str) + " (" + dosen_stats["Persen"].astype(str) + "%)", height=300)
