@@ -8,18 +8,46 @@ import plotly.express as px
 from scipy import stats
 
 st.set_page_config(page_title="Dashboard Analisis Kelas Paralel", layout="wide")
-st.markdown("## 📊 Dashboard Analisis Nilai Kelas Paralel")
+
 
 st.markdown("""
     <style>
         .block-container {
-            padding-top: 3rem;
+            padding-top: 2rem;
             padding-bottom: 1rem;
         }
+        .viz-header {
+            font-size: 28px !important;
+            font-weight: bold !important;
+            color: white !important;
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        .metric-box {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #ddd;
+            margin: 5px;
+        }
+        .metric-value {
+            font-size: 18px !important;
+            font-weight: bold !important;
+            color: #007bff;
+        }
+        .metric-label {
+            font-size: 12px !important;
+            color: #666;
+        }
+        .box-green { background-color: #d4edda; border-color: #c3e6cb; }
+        .box-red { background-color: #f8d7da; border-color: #f5c6cb; }
+        .box-blue { background-color: #cfe2ff; border-color: #b6d4fe; }
     </style>
 """, unsafe_allow_html=True)
 
-menu = st.sidebar.radio("Menu", ["Ringkasan", "Grafik", "Data"])
+
+menu = st.sidebar.radio("Menu", ["Grafik", "Data"])
 uploaded_file = st.sidebar.file_uploader("Upload File Excel", type=["xlsx"])
 
 if uploaded_file:
@@ -28,30 +56,29 @@ if uploaded_file:
 
     # ================= NORMALISASI =================
     df.columns = df.columns.str.strip().str.lower().str.replace(r"\s+", "_", regex=True)
+    
+    # 1. Total Mata Kuliah Awal (Raw)
+    raw_mk_count = df.groupby(["th_ajaran", "kode_makul"]).size().count()
 
     # Mapping huruf ke angka
     mapping_huruf = {
         "A": 4.0, "A-": 3.7, "B+": 3.3, "B": 3.0, "B-": 2.7,
         "C+": 2.3, "C": 2.0, "C-": 1.7, "D": 1.0, "E": 0.0
     }
-
+    
     if "nilai_huruf" in df.columns:
         df["nilai_angka_norm"] = df["nilai_huruf"].map(mapping_huruf)
-        # Jika nilai_angka kosong, gunakan nilai_angka_norm
         df["nilai_angka"] = df["nilai_angka"].fillna(df["nilai_angka_norm"])
     
     required = ["th_ajaran","kode_makul","grup","nilai_angka","dosen","kode_prodi"]
     if any(col not in df.columns for col in required):
         st.error("Kolom tidak lengkap")
         st.stop()
-
+    
     # ================= CLEANING =================
     df["nilai_angka"] = pd.to_numeric(df["nilai_angka"], errors="coerce")
     df = df.dropna(subset=["nilai_angka","kode_prodi","th_ajaran"])
     df = df[(df["nilai_angka"] >= 0) & (df["nilai_angka"] <= 100)]
-
-    # Simpan info pembersihan
-    init_mk_count = df.groupby(["th_ajaran", "kode_makul"]).size().count()
 
     # ================= FORMAT PRODI (STRING AMAN) =================
     df["kode_prodi"] = (
@@ -79,10 +106,9 @@ if uploaded_file:
 
     df["nama_prodi"] = df["kode_prodi"].map(mapping_prodi)
     df = df.dropna(subset=["nama_prodi"])
-
-    # ================= PARALLEL AWAL =================
-    paralel = df.groupby(["th_ajaran","kode_makul"])["grup"].nunique().reset_index()
-    df = df.merge(paralel[paralel["grup"] > 1][["th_ajaran","kode_makul"]])
+    
+    # 2. Hasil Filter Prodi S1
+    s1_mk_count = df.groupby(["th_ajaran", "kode_makul"]).ngroups
 
     # ================= CLEAN DOSEN =================
     def clean_dosen(value):
@@ -107,10 +133,16 @@ if uploaded_file:
     # ================= MIN 5 =================
     kelas_count = df.groupby(["th_ajaran","kode_makul","grup"]).size().reset_index(name="n")
     df = df.merge(kelas_count[kelas_count["n"] >= 5][["th_ajaran","kode_makul","grup"]])
+    
+    # 3. Filter Minimal 5 Mahasiswa
+    min5_mk_count = df.groupby(["th_ajaran", "kode_makul"]).ngroups
 
-    # ================= RE-CHECK PARALLEL =================
-    paralel2 = df.groupby(["th_ajaran","kode_makul"])["grup"].nunique().reset_index()
-    df = df.merge(paralel2[paralel2["grup"] > 1][["th_ajaran","kode_makul"]])
+    # ================= PARALLEL CHECK =================
+    paralel = df.groupby(["th_ajaran","kode_makul"])["grup"].nunique().reset_index()
+    df = df.merge(paralel[paralel["grup"] > 1][["th_ajaran","kode_makul"]])
+    
+    # 4. Hasil Kelas Paralel (Final)
+    final_paralel_count = df.groupby(["th_ajaran", "kode_makul"]).ngroups
 
     # ================= ANOVA =================
     results = []
@@ -152,125 +184,87 @@ if uploaded_file:
         st.stop()
 
     # ================= DASHBOARD =================
-    if menu == "Ringkasan":
-        st.subheader("📋 Ringkasan Analisis")
+    if menu == "Grafik":
+        st.markdown('<div class="viz-header"><b>📊 Visualisasi Analisis</b></div>', unsafe_allow_html=True)
         
-        # Hitung statistik global
-        total_mk_all = df.groupby(["th_ajaran", "kode_makul"]).size().count() # Ini kurang tepat, harusnya unique mk
-        # Lebih tepat:
-        all_mk = df.groupby(["th_ajaran", "kode_makul"]).size().reset_index()
-        total_mk_count = len(all_mk)
+        # ================= RINGKASAN CARDS =================
+        r_col1, r_col2, r_col3, r_col4 = st.columns(4)
+        with r_col1:
+            st.markdown(f'<div class="metric-box box-blue"><div class="metric-label">Total MK Awal</div><div class="metric-value">{raw_mk_count}</div></div>', unsafe_allow_html=True)
+        with r_col2:
+            st.markdown(f'<div class="metric-box box-blue"><div class="metric-label">Filter Prodi S1</div><div class="metric-value">{s1_mk_count}</div></div>', unsafe_allow_html=True)
+        with r_col3:
+            st.markdown(f'<div class="metric-box box-blue"><div class="metric-label">Filter Min 5 Mhs</div><div class="metric-value">{min5_mk_count}</div></div>', unsafe_allow_html=True)
+        with r_col4:
+            st.markdown(f'<div class="metric-box box-blue"><div class="metric-label">Hasil MK Paralel</div><div class="metric-value">{final_paralel_count}</div></div>', unsafe_allow_html=True)
         
-        # MK Paralel (sudah di-filter di df awal, tapi hasil_df lebih akurat untuk ANOVA)
-        total_paralel = len(hasil_df)
-        sig_count = (hasil_df["signifikan"] == "Ya").sum()
-        dosen_sama_count = hasil_df["dosen_sama"].sum()
-        dosen_beda_count = total_paralel - dosen_sama_count
-
-        # Styling boxes
-        st.markdown("""
-            <style>
-            .metric-box {
-                background-color: #f0f2f6;
-                border-radius: 10px;
-                padding: 20px;
-                text-align: center;
-                border: 1px solid #ddd;
-                margin-bottom: 10px;
-            }
-            .metric-value {
-                font-size: 24px;
-                font-weight: bold;
-                color: #007bff;
-            }
-            .metric-label {
-                font-size: 14px;
-                color: #666;
-            }
-            .box-green { background-color: #d4edda; border-color: #c3e6cb; }
-            .box-red { background-color: #f8d7da; border-color: #f5c6cb; }
-            .box-blue { background-color: #cfe2ff; border-color: #b6d4fe; }
-            </style>
-        """, unsafe_allow_html=True)
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown(f'<div class="metric-box box-blue"><div class="metric-label">Total Mata Kuliah</div><div class="metric-value">{total_mk_count}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-box box-blue"><div class="metric-label">Total Kelas Paralel</div><div class="metric-value">{total_paralel}</div></div>', unsafe_allow_html=True)
-        with col2:
-            st.markdown(f'<div class="metric-box"><div class="metric-label">Dosen Sama</div><div class="metric-value">{dosen_sama_count}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-box"><div class="metric-label">Dosen Berbeda</div><div class="metric-value">{dosen_beda_count}</div></div>', unsafe_allow_html=True)
-        with col3:
-            st.markdown(f'<div class="metric-box box-red"><div class="metric-label">Beda Signifikan</div><div class="metric-value">{sig_count}</div></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-box box-green"><div class="metric-label">Tidak Signifikan</div><div class="metric-value">{total_paralel - sig_count}</div></div>', unsafe_allow_html=True)
-
         st.divider()
-        
-        # Insight Ringkasan
-        st.markdown("### 📊 Insight Utama")
-        persen_sig = (sig_count / total_paralel * 100) if total_paralel > 0 else 0
-        st.info(f"Dari {total_paralel} mata kuliah paralel, terdapat {sig_count} ({persen_sig:.1f}%) yang menunjukkan perbedaan nilai signifikan.")
-        
-        if not hasil_df.empty:
-            ps = hasil_df.groupby("nama_prodi")["signifikan"].apply(lambda x: (x == "Ya").sum())
-            if not ps.empty:
-                prodi_max = ps.idxmax()
-                prodi_min = ps.idxmin()
-                st.write(f"Prodi dengan jumlah nilai berbeda terbanyak adalah **{prodi_max}**, sedangkan yang paling stabil adalah **{prodi_min}**.")
-
-    elif menu == "Grafik":
-        st.subheader("📊 Visualisasi Analisis")
         
         # Row 1: Three Charts
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.caption("Perbandingan Prodi: Total vs Signifikan")
             # Stacked bar chart for Prodi
             prodi_stats = hasil_df.groupby("nama_prodi")["signifikan"].value_counts().unstack(fill_value=0).reset_index()
-            if "Ya" not in prodi_stats.columns: prodi_stats["Ya"] = 0
+            prodi_stats = prodi_stats.rename(columns={"Ya": "Signifikan", "Tidak": "Tidak"})
+            if "Signifikan" not in prodi_stats.columns: prodi_stats["Signifikan"] = 0
             if "Tidak" not in prodi_stats.columns: prodi_stats["Tidak"] = 0
             
-            prodi_stats["Total"] = prodi_stats["Ya"] + prodi_stats["Tidak"]
+            prodi_stats["Total"] = prodi_stats["Signifikan"] + prodi_stats["Tidak"]
             prodi_stats = prodi_stats.sort_values(by="Total", ascending=False)
             
             # Plotly stacked bar
-            fig_prodi = px.bar(prodi_stats, x="nama_prodi", y=["Ya", "Tidak"], 
-                             labels={"value": "Jumlah MK", "nama_prodi": "Prodi", "variable": "Signifikan"},
-                             title="Signifikansi per Prodi", height=300,
-                             color_discrete_map={"Ya": "#ef553b", "Tidak": "#636efa"})
+            fig_prodi = px.bar(prodi_stats, x="nama_prodi", y=["Signifikan", "Tidak"], 
+                              labels={"value": "Jumlah MK", "nama_prodi": "Prodi", "variable": "Status"},
+                              title="Signifikansi per Prodi", height=300,
+                              color_discrete_map={"Signifikan": "#ef553b", "Tidak": "#636efa"})
+            
+            # Tambahkan total di atas grafik
+            fig_prodi.add_trace(
+                px.scatter(prodi_stats, x="nama_prodi", y="Total", text="Total").data[0]
+            )
+            fig_prodi.update_traces(
+                selector=dict(type='scatter'),
+                mode='text',
+                textposition='top center',
+                marker=dict(size=0),
+                showlegend=False
+            )
+            
+            # Berikan ruang ekstra di atas sumbu Y agar angka total tidak terpotong
+            max_total = prodi_stats["Total"].max() if not prodi_stats.empty else 10
+            fig_prodi.update_layout(yaxis=dict(range=[0, max_total * 1.15]))
+            
             st.plotly_chart(fig_prodi, use_container_width=True)
 
         with col2:
             st.caption("Perbandingan Kelas: Signifikan vs Tidak Signifikan")
             sig = hasil_df["signifikan"].value_counts().reset_index()
             sig.columns = ["Status","Jumlah"]
-            # Map to requested names
             sig["Status"] = sig["Status"].map({"Ya": "Signifikan", "Tidak": "Tidak Signifikan"})
             
             total_s = sig["Jumlah"].sum()
             sig["Persentase"] = (sig["Jumlah"] / total_s * 100).round(1)
             
             fig_sig = px.bar(sig, x="Status", y="Jumlah", 
-                           text=sig["Jumlah"].astype(str) + " (" + sig["Persentase"].astype(str) + "%)", height=300)
+                            text=sig["Jumlah"].astype(str) + " (" + sig["Persentase"].astype(str) + "%)", height=300)
             fig_sig.update_traces(textposition="outside")
             st.plotly_chart(fig_sig, use_container_width=True)
 
         with col3:
-            st.caption("Perbedaan Nilai: Dosen Sama vs Berbeda")
+            st.caption("Signifikansi: Dosen Sama vs Beda")
             dosen_stats = hasil_df.groupby("dosen_sama")["signifikan"].apply(lambda x: (x == "Ya").sum()).reset_index()
-            dosen_stats.columns = ["dosen_sama", "sig_count"]
+            dosen_stats.columns = ["dosen_sama", "jumlah"]
             
-            # Get total per dosen category
             dosen_totals = hasil_df["dosen_sama"].value_counts().reset_index()
             dosen_totals.columns = ["dosen_sama", "total_count"]
             
             dosen_stats = dosen_stats.merge(dosen_totals, on="dosen_sama")
             dosen_stats["Kategori"] = dosen_stats["dosen_sama"].map({True: "Sama", False: "Berbeda"})
-            dosen_stats["Persen"] = (dosen_stats["sig_count"] / dosen_stats["total_count"] * 100).round(1)
+            dosen_stats["Persen"] = (dosen_stats["jumlah"] / dosen_stats["total_count"] * 100).round(1)
             
-            fig_dosen = px.bar(dosen_stats, x="Kategori", y="sig_count", 
-                             text=dosen_stats["sig_count"].astype(str) + " (" + dosen_stats["Persen"].astype(str) + "%)", height=300)
+            fig_dosen = px.bar(dosen_stats, x="Kategori", y="jumlah", 
+                              text=dosen_stats["jumlah"].astype(str) + " (" + dosen_stats["Persen"].astype(str) + "%)", height=300)
             fig_dosen.update_traces(textposition="outside")
             st.plotly_chart(fig_dosen, use_container_width=True)
 
@@ -280,7 +274,7 @@ if uploaded_file:
         col4, col5 = st.columns([1,2])
         
         with col4:
-            st.caption("Sebaran Nilai Mahasiswa (Semua Kelas)")
+            st.caption("Sebaran Nilai Mahasiswa (Semua Kelas Paralel)")
             fig_hist = px.histogram(df, x="nilai_angka", nbins=20, height=300)
             fig_hist.update_layout(yaxis_title="Jumlah", xaxis_title="Nilai Angka", xaxis=dict(dtick=25))
             st.plotly_chart(fig_hist, use_container_width=True)
@@ -295,16 +289,14 @@ if uploaded_file:
             
             fig_box = px.box(plot_data, x="grup", y="nilai_angka", color="dosen", height=300)
             
-            # Add mean markers
             mean_df = plot_data.groupby("grup")["nilai_angka"].mean().reset_index()
             fig_box.add_scatter(x=mean_df["grup"], y=mean_df["nilai_angka"], mode="markers", 
                               marker=dict(size=8, symbol="diamond"), name="Mean")
             
-            # Check if this MK is significant
             mk_res = hasil_df[hasil_df["kode_makul"] == mk]
             if not mk_res.empty:
                 sig_status = mk_res["signifikan"].iloc[0]
-                st.markdown(f"**Status Signifikansi:** { '🔴 Beda Signifikan' if sig_status == 'Ya' else '🟢 Tidak Beda Signifikan' }")
+                st.markdown(f"**Status Signifikansi:** { '🔴 Signifikan' if sig_status == 'Ya' else '🟢 Tidak Signifikan' }")
             
             st.plotly_chart(fig_box, use_container_width=True)
 
@@ -312,9 +304,9 @@ if uploaded_file:
         st.subheader("📂 Data & Hasil Analisis")
         
         with st.expander("🔍 Detail Pembersihan Data"):
-            st.write(f"Total Mata Kuliah Awal: {init_mk_count}")
+            st.write(f"Total Mata Kuliah Awal: {raw_mk_count}")
             st.write(f"Total Mata Kuliah Paralel (Setelah Filter Min 5 Mahasiswa): {len(hasil_df)}")
-            st.write(f"MK yang dihapus karena tidak memenuhi syarat paralel/jumlah mahasiswa: {init_mk_count - len(hasil_df)}")
+            st.write(f"MK yang dihapus karena tidak memenuhi syarat paralel/jumlah mahasiswa: {raw_mk_count - len(hasil_df)}")
         
         st.markdown("### Data Nilai Mahasiswa (Setelah Cleaning)")
         st.dataframe(df)
