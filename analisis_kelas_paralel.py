@@ -229,6 +229,7 @@ if uploaded_file:
             prodi_stats = prodi_stats.sort_values(by="Total", ascending=False)
             
             # Plotly stacked bar - Made larger
+            st.caption("Signifikan per prodi")
             fig_prodi = px.bar(prodi_stats, x="nama_prodi", y=["Signifikan", "Tidak"], 
                               labels={"value": "Jumlah MK", "nama_prodi": "Prodi", "variable": "Status"},
                               height=350,
