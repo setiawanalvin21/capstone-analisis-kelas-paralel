@@ -19,7 +19,7 @@ st.markdown("""
         .viz-header {
             font-size: 28px !important;
             font-weight: bold !important;
-            color: white !important;
+            color: var(--text-color) !important;
             text-align: left;
             margin-bottom: 5px;
         }
@@ -70,9 +70,9 @@ if uploaded_file:
         df["nilai_angka_norm"] = df["nilai_huruf"].map(mapping_huruf)
         df["nilai_angka"] = df["nilai_angka"].fillna(df["nilai_angka_norm"])
     
-    required = ["th_ajaran","kode_makul","grup","nilai_angka","dosen","kode_prodi"]
+    required = ["th_ajaran","kode_makul","nama_makul","grup","nilai_angka","dosen","kode_prodi"]
     if any(col not in df.columns for col in required):
-        st.error("Kolom tidak lengkap")
+        st.error(f"Kolom tidak lengkap. Kolom yang dibutuhkan: {', '.join(required)}")
         st.stop()
     
     # ================= CLEANING =================
@@ -185,8 +185,23 @@ if uploaded_file:
 
     # ================= DASHBOARD =================
     if menu == "Grafik":
-        st.markdown('<div class="viz-header"><b>📊 Visualisasi Analisis</b></div>', unsafe_allow_html=True)
+        # Format Tahun agar rapi dan tahan terhadap tipe data numeric/float
+        if not tahun:
+            tahun_str = "Semua Tahun"
+        else:
+            # Pastikan semua elemen adalah string, hapus .0, dan filter nilai kosong/aneh
+            tahun_clean = sorted([str(t).replace(".0", "").strip() for t in tahun if str(t).strip()])
+            
+            if not tahun_clean:
+                tahun_str = "Semua Tahun"
+            elif len(tahun_clean) == 1:
+                tahun_str = tahun_clean[0]
+            else:
+                tahun_str = f"{tahun_clean[0]}–{tahun_clean[-1]}"
         
+       # st.markdown(f'<div class="viz-header"><b>Visualisasi Analisis Data Akademik Tahun Ajaran {tahun_str}</b></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="viz-header"><b>Visualisasi Analisis Data Akademik Tahun Ajaran 2024/2025–2025/2026</b></div>', unsafe_allow_html=True)
+
         # ================= RINGKASAN CARDS =================
         r_col1, r_col2, r_col3, r_col4 = st.columns(4)
         with r_col1:
@@ -200,11 +215,10 @@ if uploaded_file:
         
         st.divider()
         
-        # Row 1: Three Charts
-        col1, col2, col3 = st.columns(3)
+        # Row 1: Three Charts with adjusted widths
+        col1, col2, col3 = st.columns([2, 1, 1])
         
         with col1:
-            st.caption("Signifikansi per Prodi")
             # Stacked bar chart for Prodi
             prodi_stats = hasil_df.groupby("nama_prodi")["signifikan"].value_counts().unstack(fill_value=0).reset_index()
             prodi_stats = prodi_stats.rename(columns={"Ya": "Signifikan", "Tidak": "Tidak"})
@@ -214,10 +228,10 @@ if uploaded_file:
             prodi_stats["Total"] = prodi_stats["Signifikan"] + prodi_stats["Tidak"]
             prodi_stats = prodi_stats.sort_values(by="Total", ascending=False)
             
-            # Plotly stacked bar
+            # Plotly stacked bar - Made larger
             fig_prodi = px.bar(prodi_stats, x="nama_prodi", y=["Signifikan", "Tidak"], 
                               labels={"value": "Jumlah MK", "nama_prodi": "Prodi", "variable": "Status"},
-                              height=300,
+                              height=350,
                               color_discrete_map={"Signifikan": "#ef553b", "Tidak": "#636efa"})
             
             # Tambahkan total di atas grafik
@@ -247,8 +261,9 @@ if uploaded_file:
             total_s = sig["Jumlah"].sum()
             sig["Persentase"] = (sig["Jumlah"] / total_s * 100).round(1)
             
+            # Made smaller height
             fig_sig = px.bar(sig, x="Status", y="Jumlah", 
-                            text=sig["Jumlah"].astype(str) + " (" + sig["Persentase"].astype(str) + "%)", height=300)
+                            text=sig["Jumlah"].astype(str) + " (" + sig["Persentase"].astype(str) + "%)", height=250)
             fig_sig.update_traces(textposition="outside")
             st.plotly_chart(fig_sig, use_container_width=True)
 
@@ -257,14 +272,14 @@ if uploaded_file:
             dosen_stats = hasil_df.groupby("dosen_sama")["signifikan"].apply(lambda x: (x == "Ya").sum()).reset_index()
             dosen_stats.columns = ["dosen_sama", "jumlah"]
             
-            # Hitung total keseluruhan yang signifikan sebagai pembagi agar total % jadi 100%
             total_sig_count = (hasil_df["signifikan"] == "Ya").sum()
             
             dosen_stats["Kategori"] = dosen_stats["dosen_sama"].map({True: "Sama", False: "Berbeda"})
             dosen_stats["Persen"] = (dosen_stats["jumlah"] / total_sig_count * 100).round(1) if total_sig_count > 0 else 0
             
+            # Made smaller height
             fig_dosen = px.bar(dosen_stats, x="Kategori", y="jumlah", 
-                              text=dosen_stats["jumlah"].astype(str) + " (" + dosen_stats["Persen"].astype(str) + "%)", height=300)
+                              text=dosen_stats["jumlah"].astype(str) + " (" + dosen_stats["Persen"].astype(str) + "%)", height=250)
             fig_dosen.update_traces(textposition="outside")
             st.plotly_chart(fig_dosen, use_container_width=True)
 
@@ -281,25 +296,78 @@ if uploaded_file:
             
         with col5:
             st.caption("Perbandingan Nilai Antar Kelas")
-            mk_list = sorted(df["kode_makul"].unique())
-            mk = st.selectbox("Pilih Mata Kuliah", mk_list)
             
-            plot_data = df[df["kode_makul"] == mk].copy()
-            plot_data = plot_data.explode("dosen")
+            # Filter Prodi khusus untuk section ini - tambahkan opsi "Semua Prodi"
+            prodi_options = ["Semua Prodi"] + sorted(hasil_df["nama_prodi"].unique().tolist())
+            selected_prodi = st.selectbox("Pilih Prodi", prodi_options, key="prodi_box")
             
-            fig_box = px.box(plot_data, x="grup", y="nilai_angka", color="dosen", height=300)
+            # 1. Tentukan daftar MK yang akan ditampilkan di dropdown
+            if selected_prodi == "Semua Prodi":
+                # Ambil semua MK yang paralel (tanpa peduli prodi)
+                parallel_mk_codes = hasil_df["kode_makul"].unique()
+                df_for_map = df[df["kode_makul"].isin(parallel_mk_codes)]
+                # Buat map unik berdasarkan kode_makul (agar satu MK hanya muncul sekali)
+                mk_map = df_for_map[['kode_makul', 'nama_makul']].drop_duplicates(subset=['kode_makul'])
+                mk_map['nama_prodi'] = "Semua Prodi"
+            else:
+                # Filter hanya untuk prodi yang dipilih
+                df_for_map = df[df["nama_prodi"] == selected_prodi]
+                mk_map = df_for_map[['kode_makul', 'nama_makul', 'nama_prodi']].drop_duplicates()
             
-            mean_df = plot_data.groupby("grup")["nilai_angka"].mean().reset_index()
-            fig_box.add_scatter(x=mean_df["grup"], y=mean_df["nilai_angka"], mode="markers", 
-                              marker=dict(size=8, symbol="diamond"), name="Mean")
+            mk_names = mk_map['nama_makul'].tolist()
             
-            mk_res = hasil_df[hasil_df["kode_makul"] == mk]
-            if not mk_res.empty:
-                sig_status = mk_res["signifikan"].iloc[0]
-                st.markdown(f"**Status Signifikansi:** { '🔴 Signifikan' if sig_status == 'Ya' else '🟢 Tidak Signifikan' }")
-            
-            st.plotly_chart(fig_box, use_container_width=True)
-
+            if not mk_names:
+                st.warning("Tidak ada mata kuliah paralel untuk pilihan ini.")
+            else:
+                selected_mk_name = st.selectbox("Pilih Mata Kuliah", mk_names, key="mk_box")
+                
+                # Ambil informasi MK yang dipilih
+                mk_info = mk_map[mk_map['nama_makul'] == selected_mk_name].iloc[0]
+                mk = mk_info['kode_makul']
+                actual_prodi = mk_info['nama_prodi']
+                
+                # Filter data khusus untuk MK ini
+                if selected_prodi == "Semua Prodi":
+                    plot_data_all = df[df["kode_makul"] == mk].copy()
+                else:
+                    plot_data_all = df[(df["kode_makul"] == mk) & (df["nama_prodi"] == actual_prodi)].copy()
+                
+                if plot_data_all.empty:
+                    st.warning("Tidak ada data untuk mata kuliah ini pada pilihan filter saat ini.")
+                else:
+                    # Ambil tahun terbaru yang tersedia dalam data yang sudah terfilter
+                    last_year = plot_data_all["th_ajaran"].max()
+                    plot_data = plot_data_all[plot_data_all["th_ajaran"] == last_year].copy()
+                    
+                    # Sederhanakan label dosen
+                    plot_data["dosen_label"] = plot_data["dosen"].apply(lambda x: ", ".join(x) if isinstance(x, list) else str(x))
+                    
+                    fig_box = px.box(plot_data, x="grup", y="nilai_angka", color="dosen_label", height=300)
+                    
+                    # Add mean markers
+                    mean_df = plot_data.groupby("grup")["nilai_angka"].mean().reset_index()
+                    fig_box.add_scatter(x=mean_df["grup"], y=mean_df["nilai_angka"], mode="markers", 
+                                      marker=dict(size=8, symbol="diamond", color="red"), name="Mean")
+                    
+                    # Update layout agar lebih bersih
+                    fig_box.update_layout(
+                        showlegend=True,
+                        legend_title_text="Dosen",
+                        xaxis_title="Kelas/Grup",
+                        yaxis_title="Nilai",
+                        margin=dict(l=20, r=20, t=20, b=20)
+                    )
+                    
+                    # Check if this MK is significant
+                    mk_res = hasil_df[hasil_df["kode_makul"] == mk]
+                    if not mk_res.empty:
+                        sig_status = mk_res["signifikan"].iloc[0]
+                        st.markdown(f"**Tahun Ajaran:** {last_year}")
+                        st.markdown(f"**Status Signifikansi:** { '🔴 Beda Signifikan' if sig_status == 'Ya' else '🟢 Tidak Beda Signifikan' }")
+                    
+                    st.plotly_chart(fig_box, use_container_width=True)
+                    st.divider()
+                
     elif menu == "Data":
         st.subheader("📂 Data & Hasil Analisis")
         
