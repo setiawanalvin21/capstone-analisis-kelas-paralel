@@ -215,8 +215,8 @@ if uploaded_file:
         
         st.divider()
         
-        # Row 1: Three Charts with adjusted widths
-        col1, col2, col3 = st.columns([2, 1, 1])
+        # Row 1: Four Charts
+        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         
         with col1:
             # Stacked bar chart for Prodi
@@ -231,9 +231,9 @@ if uploaded_file:
             # Plotly stacked bar - Made larger
             st.caption("Signifikan per prodi")
             fig_prodi = px.bar(prodi_stats, x="nama_prodi", y=["Signifikan", "Tidak"], 
-                              labels={"value": "Jumlah MK", "nama_prodi": "Prodi", "variable": "Status"},
-                              height=350,
-                              color_discrete_map={"Signifikan": "#ef553b", "Tidak": "#636efa"})
+                               labels={"value": "Jumlah MK", "nama_prodi": "Prodi", "variable": "Status"},
+                               height=350,
+                               color_discrete_map={"Signifikan": "#ef553b", "Tidak": "#636efa"})
             
             # Tambahkan total di atas grafik
             fig_prodi.add_trace(
@@ -249,10 +249,13 @@ if uploaded_file:
             
             # Berikan ruang ekstra di atas sumbu Y agar angka total tidak terpotong
             max_total = prodi_stats["Total"].max() if not prodi_stats.empty else 10
-            fig_prodi.update_layout(yaxis=dict(range=[0, max_total * 1.15]))
+            fig_prodi.update_layout(
+                yaxis=dict(range=[0, max_total * 1.15]),
+                margin=dict(l=10, r=10, t=30, b=10)
+            )
             
             st.plotly_chart(fig_prodi, use_container_width=True)
-
+    
         with col2:
             st.caption("Perbandingan Kelas: Signifikan vs Tidak Signifikan")
             sig = hasil_df["signifikan"].value_counts().reset_index()
@@ -264,10 +267,11 @@ if uploaded_file:
             
             # Made smaller height
             fig_sig = px.bar(sig, x="Status", y="Jumlah", 
-                            text=sig["Jumlah"].astype(str) + " (" + sig["Persentase"].astype(str) + "%)", height=250)
+                             text=sig["Jumlah"].astype(str) + " (" + sig["Persentase"].astype(str) + "%)", height=350)
             fig_sig.update_traces(textposition="outside")
+            fig_sig.update_layout(margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig_sig, use_container_width=True)
-
+    
         with col3:
             st.caption("Signifikansi: Dosen Sama vs Beda")
             dosen_stats = hasil_df.groupby("dosen_sama")["signifikan"].apply(lambda x: (x == "Ya").sum()).reset_index()
@@ -280,22 +284,25 @@ if uploaded_file:
             
             # Made smaller height
             fig_dosen = px.bar(dosen_stats, x="Kategori", y="jumlah", 
-                              text=dosen_stats["jumlah"].astype(str) + " (" + dosen_stats["Persen"].astype(str) + "%)", height=250)
+                                text=dosen_stats["jumlah"].astype(str) + " (" + dosen_stats["Persen"].astype(str) + "%)", height=350)
             fig_dosen.update_traces(textposition="outside")
+            fig_dosen.update_layout(margin=dict(l=10, r=10, t=30, b=10))
             st.plotly_chart(fig_dosen, use_container_width=True)
 
-        st.divider()
-        
-        # Row 2: Distribution and BoxPlot
-        col4, col5 = st.columns([1,2])
-        
         with col4:
             st.caption("Sebaran Nilai Mahasiswa (Semua Kelas Paralel)")
-            fig_hist = px.histogram(df, x="nilai_angka", nbins=20, height=300)
-            fig_hist.update_layout(yaxis_title="Jumlah", xaxis_title="Nilai Angka", xaxis=dict(dtick=25))
+            fig_hist = px.histogram(df, x="nilai_angka", nbins=20, height=350)
+            fig_hist.update_layout(
+                yaxis_title="Jumlah", 
+                xaxis_title="Nilai Angka", 
+                xaxis=dict(dtick=25),
+                margin=dict(l=10, r=10, t=30, b=10)
+            )
             st.plotly_chart(fig_hist, use_container_width=True)
-            
-        with col5:
+        
+        # Row 2: BoxPlot
+        col_box = st.columns([1])
+        with col_box[0]:
             st.caption("Perbandingan Nilai Antar Kelas")
             
             # Filter Prodi khusus untuk section ini - tambahkan opsi "Semua Prodi"
@@ -348,7 +355,7 @@ if uploaded_file:
                     # Add mean markers
                     mean_df = plot_data.groupby("grup")["nilai_angka"].mean().reset_index()
                     fig_box.add_scatter(x=mean_df["grup"], y=mean_df["nilai_angka"], mode="markers", 
-                                      marker=dict(size=8, symbol="diamond", color="red"), name="Mean")
+                                       marker=dict(size=8, symbol="diamond", color="red"), name="Mean")
                     
                     # Update layout agar lebih bersih
                     fig_box.update_layout(
@@ -367,9 +374,9 @@ if uploaded_file:
                         st.markdown(f"**Status Signifikansi:** { '🔴 Beda Signifikan' if sig_status == 'Ya' else '🟢 Tidak Beda Signifikan' }")
                     
                     st.plotly_chart(fig_box, use_container_width=True)
-                    st.divider()
                 
     elif menu == "Data":
+
         st.subheader("📂 Data & Hasil Analisis")
         
         with st.expander("🔍 Detail Pembersihan Data"):
@@ -397,4 +404,4 @@ if uploaded_file:
         st.dataframe(avg_prodi)
 
 else:
-    st.info("Upload file Excel terlebih dahulu")
+    st.info("Menbaca Data...")
