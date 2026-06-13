@@ -301,79 +301,95 @@ if uploaded_file:
             st.plotly_chart(fig_hist, use_container_width=True)
         
         # Row 2: BoxPlot
-        col_box = st.columns([1])
-        with col_box[0]:
-            st.caption("Perbandingan Nilai Antar Kelas")
-            
-            # Filter Prodi khusus untuk section ini - tambahkan opsi "Semua Prodi"
-            prodi_options = ["Semua Prodi"] + sorted(hasil_df["nama_prodi"].unique().tolist())
+        st.caption("Perbandingan Nilai Antar Kelas")
+        
+        # Filter Prodi khusus untuk section ini - tambahkan opsi "Semua Prodi"
+        prodi_options = ["Semua Prodi"] + sorted(hasil_df["nama_prodi"].unique().tolist())
+        
+        col_p, col_m = st.columns(2)
+        with col_p:
             selected_prodi = st.selectbox("Pilih Prodi", prodi_options, key="prodi_box")
-            
-            # 1. Tentukan daftar MK yang akan ditampilkan di dropdown
-            if selected_prodi == "Semua Prodi":
-                # Ambil semua MK yang paralel (tanpa peduli prodi)
-                parallel_mk_codes = hasil_df["kode_makul"].unique()
-                df_for_map = df[df["kode_makul"].isin(parallel_mk_codes)]
-                # Buat map unik berdasarkan kode_makul (agar satu MK hanya muncul sekali)
-                mk_map = df_for_map[['kode_makul', 'nama_makul']].drop_duplicates(subset=['kode_makul'])
-                mk_map['nama_prodi'] = "Semua Prodi"
-            else:
-                # Filter hanya untuk prodi yang dipilih
-                df_for_map = df[df["nama_prodi"] == selected_prodi]
-                mk_map = df_for_map[['kode_makul', 'nama_makul', 'nama_prodi']].drop_duplicates()
-            
-            mk_names = mk_map['nama_makul'].tolist()
-            
+        
+        # 1. Tentukan daftar MK yang akan ditampilkan di dropdown
+        if selected_prodi == "Semua Prodi":
+            # Ambil semua MK yang paralel (tanpa peduli prodi)
+            parallel_mk_codes = hasil_df["kode_makul"].unique()
+            df_for_map = df[df["kode_makul"].isin(parallel_mk_codes)]
+            # Buat map unik berdasarkan kode_makul (agar satu MK hanya muncul sekali)
+            mk_map = df_for_map[['kode_makul', 'nama_makul']].drop_duplicates(subset=['kode_makul'])
+            mk_map['nama_prodi'] = "Semua Prodi"
+        else:
+            # Filter hanya untuk prodi yang dipilih
+            df_for_map = df[df["nama_prodi"] == selected_prodi]
+            mk_map = df_for_map[['kode_makul', 'nama_makul', 'nama_prodi']].drop_duplicates()
+        
+        mk_names = mk_map['nama_makul'].tolist()
+
+        with col_m:
             if not mk_names:
                 st.warning("Tidak ada mata kuliah paralel untuk pilihan ini.")
             else:
                 selected_mk_name = st.selectbox("Pilih Mata Kuliah", mk_names, key="mk_box")
+        
+        # Ambil informasi MK yang dipilih - PINDAH KE LUAR COLUMNS agar grafik full width
+        if 'selected_mk_name' in locals() and not mk_names == []:
+            mk_info = mk_map[mk_map['nama_makul'] == selected_mk_name].iloc[0]
+            mk = mk_info['kode_makul']
+            actual_prodi = mk_info['nama_prodi']
+            
+            # Filter data khusus untuk MK ini
+            if selected_prodi == "Semua Prodi":
+                plot_data_all = df[df["kode_makul"] == mk].copy()
+            else:
+                plot_data_all = df[(df["kode_makul"] == mk) & (df["nama_prodi"] == actual_prodi)].copy()
+            
+            if plot_data_all.empty:
+                st.warning("Tidak ada data untuk mata kuliah ini pada pilihan filter saat ini.")
+            else:
+                # Ambil tahun terbaru yang tersedia dalam data yang sudah terfilter
+                last_year = plot_data_all["th_ajaran"].max()
+                plot_data = plot_data_all[plot_data_all["th_ajaran"] == last_year].copy()
                 
-                # Ambil informasi MK yang dipilih
-                mk_info = mk_map[mk_map['nama_makul'] == selected_mk_name].iloc[0]
-                mk = mk_info['kode_makul']
-                actual_prodi = mk_info['nama_prodi']
+                # Sederhanakan label dosen
+                plot_data["dosen_label"] = plot_data["dosen"].apply(lambda x: ", ".join(x) if isinstance(x, list) else str(x))
                 
-                # Filter data khusus untuk MK ini
-                if selected_prodi == "Semua Prodi":
-                    plot_data_all = df[df["kode_makul"] == mk].copy()
-                else:
-                    plot_data_all = df[(df["kode_makul"] == mk) & (df["nama_prodi"] == actual_prodi)].copy()
+                fig_box = px.box(plot_data, x="grup", y="nilai_angka", color="dosen_label", height=400)
                 
-                if plot_data_all.empty:
-                    st.warning("Tidak ada data untuk mata kuliah ini pada pilihan filter saat ini.")
-                else:
-                    # Ambil tahun terbaru yang tersedia dalam data yang sudah terfilter
-                    last_year = plot_data_all["th_ajaran"].max()
-                    plot_data = plot_data_all[plot_data_all["th_ajaran"] == last_year].copy()
-                    
-                    # Sederhanakan label dosen
-                    plot_data["dosen_label"] = plot_data["dosen"].apply(lambda x: ", ".join(x) if isinstance(x, list) else str(x))
-                    
-                    fig_box = px.box(plot_data, x="grup", y="nilai_angka", color="dosen_label", height=300)
-                    
-                    # Add mean markers
-                    mean_df = plot_data.groupby("grup")["nilai_angka"].mean().reset_index()
-                    fig_box.add_scatter(x=mean_df["grup"], y=mean_df["nilai_angka"], mode="markers", 
-                                       marker=dict(size=8, symbol="diamond", color="red"), name="Mean")
-                    
-                    # Update layout agar lebih bersih
-                    fig_box.update_layout(
-                        showlegend=True,
-                        legend_title_text="Dosen",
-                        xaxis_title="Kelas/Grup",
-                        yaxis_title="Nilai",
-                        margin=dict(l=20, r=20, t=20, b=20)
-                    )
-                    
-                    # Check if this MK is significant
-                    mk_res = hasil_df[hasil_df["kode_makul"] == mk]
-                    if not mk_res.empty:
-                        sig_status = mk_res["signifikan"].iloc[0]
-                        st.markdown(f"**Tahun Ajaran:** {last_year}")
-                        st.markdown(f"**Status Signifikansi:** { '🔴 Beda Signifikan' if sig_status == 'Ya' else '🟢 Tidak Beda Signifikan' }")
-                    
-                    st.plotly_chart(fig_box, use_container_width=True)
+                # Add mean markers
+                mean_df = plot_data.groupby("grup")["nilai_angka"].mean().reset_index()
+                fig_box.add_scatter(x=mean_df["grup"], y=mean_df["nilai_angka"], mode="markers", 
+                                    marker=dict(size=8, symbol="diamond", color="red"), name="Mean")
+                
+                # Update layout agar lebih bersih dan padat
+                fig_box.update_layout(
+                    autosize=True,
+                    showlegend=True,
+                    legend=dict(
+                        orientation="v",
+                        yanchor="top",
+                        y=1,
+                        xanchor="left",
+                        x=1.02
+                    ),
+                    legend_title_text="Dosen",
+                    xaxis_title="Kelas/Grup",
+                    yaxis_title="Nilai",
+                    margin=dict(l=10, r=10, t=0, b=10)
+                )
+                
+                # Check if this MK is significant
+                mk_res = hasil_df[hasil_df["kode_makul"] == mk]
+                if not mk_res.empty:
+                    sig_status = mk_res["signifikan"].iloc[0]
+                    col_sig, col_year = st.columns([1, 1])
+                    col_sig.markdown(f"**Status Signifikansi:** { '🔴 Beda Signifikan' if sig_status == 'Ya' else '🟢 Tidak Beda Signifikan' }")
+                    col_year.markdown(f"**Tahun Ajaran:** {last_year}")
+                
+                st.plotly_chart(fig_box, use_container_width=True)
+
+
+
+
                 
     elif menu == "Data":
 
