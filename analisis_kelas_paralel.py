@@ -273,7 +273,7 @@ if uploaded_file:
             st.plotly_chart(fig_sig, use_container_width=True)
     
         with col3:
-            st.caption("Signifikansi: Dosen Sama vs Beda")
+            st.caption("Signifikansi pada Kelas dengan Dosen Sama dan Berbeda")
             dosen_stats = hasil_df.groupby("dosen_sama")["signifikan"].apply(lambda x: (x == "Ya").sum()).reset_index()
             dosen_stats.columns = ["dosen_sama", "jumlah"]
             
