@@ -420,4 +420,4 @@ if uploaded_file:
         st.dataframe(avg_prodi)
 
 else:
-    st.info("Menbaca Data...")
+    st.info("Membaca Data...")
